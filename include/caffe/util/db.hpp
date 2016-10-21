@@ -27,6 +27,7 @@ class Transaction {
  public:
   Transaction() { }
   virtual ~Transaction() { }
+  virtual void Get(const string& key, string& value){}
   virtual void Put(const string& key, const string& value) = 0;
   virtual void Commit() = 0;
 

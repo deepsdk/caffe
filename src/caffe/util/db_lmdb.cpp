@@ -48,6 +48,27 @@ LMDBTransaction* LMDB::NewTransaction() {
   return new LMDBTransaction(mdb_env_);
 }
 
+void LMDBTransaction::Get(const string& key, string& value) {
+  MDB_dbi mdb_dbi;
+  MDB_val mdb_key, mdb_data;
+  MDB_txn *mdb_txn;
+
+  // Initialize MDB variables
+  MDB_CHECK(mdb_txn_begin(mdb_env_, NULL, MDB_RDONLY, &mdb_txn));
+  MDB_CHECK(mdb_dbi_open(mdb_txn, NULL, 0, &mdb_dbi));
+
+  mdb_key.mv_size = key.size();
+  mdb_key.mv_data = const_cast<char*>(key.data());
+
+  // Add data to the transaction
+  int put_rc = mdb_get(mdb_txn, mdb_dbi, &mdb_key, &mdb_data);
+  MDB_CHECK(put_rc);
+  value = string(static_cast<const char*>(mdb_data.mv_data), mdb_data.mv_size);
+
+  // Cleanup after successful commit
+  mdb_dbi_close(mdb_env_, mdb_dbi);
+}
+
 void LMDBTransaction::Put(const string& key, const string& value) {
   keys.push_back(key);
   values.push_back(value);

@@ -15,6 +15,8 @@ namespace bp = boost::python;
 #include "caffe/caffe.hpp"
 #include "caffe/util/signal_handler.h"
 
+#include "caffe/layers/id_data_layer.hpp"
+
 using caffe::Blob;
 using caffe::Caffe;
 using caffe::Net;
@@ -54,6 +56,7 @@ DEFINE_string(sigint_effect, "stop",
 DEFINE_string(sighup_effect, "snapshot",
              "Optional; action to take when a SIGHUP signal is received: "
              "snapshot, stop or none.");
+DEFINE_int32(image_id, 0, "Optional: Id of image in lmdb.");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -284,6 +287,13 @@ int test() {
   caffe_net.CopyTrainedLayersFrom(FLAGS_weights);
   LOG(INFO) << "Running for " << FLAGS_iterations << " iterations.";
 
+  if (strcmp(caffe_net.layers()[0]->type(), "IdData") == 0){
+    boost::shared_ptr<caffe::IdDataLayer<float> > layer = 
+      boost::static_pointer_cast<caffe::IdDataLayer<float> >(caffe_net.layers()[0]);
+    layer->set_image_id(FLAGS_image_id);
+    LOG(INFO) << "Set image_id of IdData layer to " << FLAGS_image_id;
+  }
+
   vector<int> test_score_output_id;
   vector<float> test_score;
   float loss = 0;
@@ -324,6 +334,16 @@ int test() {
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
+
+  float max_id = -1;
+  float max_score = -1;
+  for (int i = 0; i < test_score.size(); ++i) {
+    if (test_score[i] > max_score){
+      max_score = test_score[i];
+      max_id = i;
+    }
+  }
+  LOG(INFO) << "predicted label is " << max_id;
 
   return 0;
 }

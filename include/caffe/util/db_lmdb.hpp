@@ -57,6 +57,7 @@ class LMDBTransaction : public Transaction {
  public:
   explicit LMDBTransaction(MDB_env* mdb_env)
     : mdb_env_(mdb_env) { }
+  virtual void Get(const string& key, string& value);
   virtual void Put(const string& key, const string& value);
   virtual void Commit();
 
