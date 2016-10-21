@@ -321,7 +321,11 @@ int test() {
   }
   loss /= FLAGS_iterations;
   LOG(INFO) << "Loss: " << loss;
+
+  std::ostringstream json;
+  json << "{\"id\":" << FLAGS_image_id;
   for (int i = 0; i < test_score.size(); ++i) {
+
     const std::string& output_name = caffe_net.blob_names()[
         caffe_net.output_blob_indices()[test_score_output_id[i]]];
     const float loss_weight = caffe_net.blob_loss_weights()[
@@ -333,8 +337,11 @@ int test() {
                       << " = " << loss_weight * mean_score << " loss)";
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
+    json << ",\"" << output_name << "\":" << mean_score;
   }
 
+  json << "}";
+  std::cout << json.str() << std::endl;
   return 0;
 }
 RegisterBrewFunction(test);

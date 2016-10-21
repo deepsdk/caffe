@@ -50,16 +50,6 @@ void IdDataLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   txn->Get(key_str, value);
   datum.ParseFromString(value);
 
-  LOG(INFO) << "dbg>----------------------------------------------";
-  LOG(INFO) << "dbg>channels="<< datum.channels();
-  LOG(INFO) << "dbg>channels="<< datum.channels();
-  LOG(INFO) << "dbg>height="<< datum.height();
-  LOG(INFO) << "dbg>width="<< datum.width();
-  LOG(INFO) << "dbg>encoded="<< datum.encoded();
-  LOG(INFO) << "dbg>label="<< datum.label();
-  LOG(INFO) << "dbg>image_id_="<< image_id_;
-
-
   top[0]->Reshape(1, datum.channels(), datum.height(), datum.width());
   top[1]->Reshape(1, 1, 1, 1);
   this->data_transformer_->Transform(datum, top[0]);
