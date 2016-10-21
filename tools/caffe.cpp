@@ -335,16 +335,6 @@ int test() {
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
 
-  float max_id = -1;
-  float max_score = -1;
-  for (int i = 0; i < test_score.size(); ++i) {
-    if (test_score[i] > max_score){
-      max_score = test_score[i];
-      max_id = i;
-    }
-  }
-  LOG(INFO) << "predicted label is " << max_id;
-
   return 0;
 }
 RegisterBrewFunction(test);
