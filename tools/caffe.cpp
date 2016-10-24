@@ -16,6 +16,12 @@ namespace bp = boost::python;
 #include "caffe/util/signal_handler.h"
 
 #include "caffe/layers/id_data_layer.hpp"
+#ifdef USE_OPENCV 
+#include <opencv2/core/core.hpp> 
+#include <opencv2/highgui/highgui.hpp>
+#endif  // USE_OPENCV
+
+
 
 using caffe::Blob;
 using caffe::Caffe;
@@ -27,6 +33,7 @@ using caffe::string;
 using caffe::Timer;
 using caffe::vector;
 using std::ostringstream;
+using caffe::Blob;
 
 DEFINE_string(gpu, "",
     "Optional; run in GPU mode on given device IDs separated by ','."
@@ -56,7 +63,9 @@ DEFINE_string(sigint_effect, "stop",
 DEFINE_string(sighup_effect, "snapshot",
              "Optional; action to take when a SIGHUP signal is received: "
              "snapshot, stop or none.");
+
 DEFINE_int32(image_id, 0, "Optional: Id of image in lmdb.");
+DEFINE_string(out_image_path, "", "Optional: Write output of hidden layers to specified image path.");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -260,6 +269,92 @@ int train() {
 RegisterBrewFunction(train);
 
 
+#ifdef USE_OPENCV 
+void blob_to_wall(cv::Mat wall, boost::shared_ptr<Blob<float> > blob, int top) {
+  const int channels = blob->shape(1);
+  int height = 1;
+  int width = 1;
+  if (blob->num_axes() == 4){
+    height = blob->shape(2);
+    width = blob->shape(3);
+  }
+  const float* data = blob->cpu_data();
+
+  for (int c = 0; c < channels; ++c) {
+    for (int h = 0; h < height; ++h) {
+      uchar* ptr = wall.ptr<uchar>(h+top);
+      for (int w = 0; w < width; ++w) {
+        int id = c * height * width + h * width + w;
+        ptr[w+c*width] = static_cast<uchar>(data[id] * 256);
+      }
+    }
+  }
+}
+
+void blobs_to_wall(const vector<boost::shared_ptr<Blob<float> > >& blobs, std::string& out_path) {
+  int total_height = 0;
+  int max_width = 0;
+
+  static const int arr[] = {2,3,4,5,6,7};
+  vector<int> ids (arr, arr + sizeof(arr) / sizeof(arr[0]) );
+  for(int i = 0; i < ids.size(); i++){
+    boost::shared_ptr<Blob<float> > blob = blobs[ids[i]];
+    int width = 0;
+    switch(blob->num_axes()){
+    case 4:
+      total_height += blob->shape(2);
+      width = blob->shape(3) * blob->channels();
+      break;
+    case 2:
+      total_height += 1;
+      width = blob->channels();
+      break;
+    }
+    if (width > max_width){
+      max_width = width;
+    }
+  }
+
+  cv::Mat wall = cv::Mat::zeros(total_height, max_width, CV_8UC1);
+  int top = 0;
+  for(int i = 0; i < ids.size(); i++){
+    boost::shared_ptr<Blob<float> > blob = blobs[ids[i]];
+    switch(blob->num_axes()){
+    case 4:
+      blob_to_wall(wall, blob, top);
+      top += blob->shape(2);
+      break;
+    case 2:
+      blob_to_wall(wall, blob, top);
+      top += 1;
+      break;
+    }
+  }
+
+  LOG(INFO) << "Write output of hidden layers to " << out_path;
+  cv::imwrite(out_path, wall);
+}
+
+void blob_to_image(const std::string& blob_name, boost::shared_ptr<Blob<float> > blob) {
+  const int channels = blob->channels();
+  const int height = blob->height();
+  const int width = blob->width();
+  const float* data = blob->cpu_data();
+
+  for (int c = 0; c < channels; ++c) {
+    cv::Mat img = cv::Mat::zeros(width, height, CV_8UC1);
+    for (int h = 0; h < height; ++h) {
+      uchar* ptr = img.ptr<uchar>(h);
+      for (int w = 0; w < width; ++w) {
+        int id = c * height * width + h * width + w;
+        ptr[w] = static_cast<uchar>(data[id] * 256);
+      }
+    }
+    cv::imwrite(cv::format("img_%s_%02d.png", blob_name.c_str(), c), img);
+  }
+}
+#endif
+
 // Test: score a model.
 int test() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
@@ -288,7 +383,7 @@ int test() {
   LOG(INFO) << "Running for " << FLAGS_iterations << " iterations.";
 
   if (strcmp(caffe_net.layers()[0]->type(), "IdData") == 0){
-    boost::shared_ptr<caffe::IdDataLayer<float> > layer = 
+    shared_ptr<caffe::IdDataLayer<float> > layer = 
       boost::static_pointer_cast<caffe::IdDataLayer<float> >(caffe_net.layers()[0]);
     layer->set_image_id(FLAGS_image_id);
     LOG(INFO) << "Set image_id of IdData layer to " << FLAGS_image_id;
@@ -321,6 +416,19 @@ int test() {
   }
   loss /= FLAGS_iterations;
   LOG(INFO) << "Loss: " << loss;
+
+
+  const vector<string>& blob_names =  caffe_net.blob_names();
+  const vector<boost::shared_ptr<Blob<float> > >&  blobs = caffe_net.blobs();
+  LOG(INFO) << blob_names.size() << " blobs:";
+  for(int i = 0; i < caffe_net.blob_names().size(); i++){
+    LOG(INFO) << "  [" << i << "] " << blob_names[i] << ": " << blobs[i]->shape_string();
+  }
+#ifdef USE_OPENCV 
+  if (FLAGS_out_image_path != ""){
+    blobs_to_wall(blobs, FLAGS_out_image_path);
+  }
+#endif  // USE_OPENCV
 
   std::ostringstream json;
   json << "{\"id\":" << FLAGS_image_id;
@@ -468,3 +576,4 @@ int main(int argc, char** argv) {
     gflags::ShowUsageWithFlagsRestrict(argv[0], "tools/caffe");
   }
 }
+
