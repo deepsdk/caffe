@@ -431,7 +431,7 @@ int test() {
 #endif  // USE_OPENCV
 
   std::ostringstream json;
-  json << "{\"id\":" << FLAGS_image_id;
+  json << "image_id" << "\t" << FLAGS_image_id << "\n";
   for (int i = 0; i < test_score.size(); ++i) {
 
     const std::string& output_name = caffe_net.blob_names()[
@@ -445,11 +445,10 @@ int test() {
                       << " = " << loss_weight * mean_score << " loss)";
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
-    json << ",\"" << output_name << "\":" << mean_score;
+    json << output_name << "\t" << mean_score << "\n";
   }
 
-  json << "}";
-  std::cout << json.str() << std::endl;
+  std::cout << json.str();
   return 0;
 }
 RegisterBrewFunction(test);

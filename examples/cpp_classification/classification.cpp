@@ -244,9 +244,6 @@ int main(int argc, char** argv) {
 
   string file = argv[5];
 
-  std::cout << "---------- Prediction for "
-            << file << " ----------" << std::endl;
-
   cv::Mat img = cv::imread(file, -1);
   CHECK(!img.empty()) << "Unable to decode image " << file;
   std::vector<Prediction> predictions = classifier.Classify(img);
@@ -254,8 +251,8 @@ int main(int argc, char** argv) {
   /* Print the top N predictions. */
   for (size_t i = 0; i < predictions.size(); ++i) {
     Prediction p = predictions[i];
-    std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
-              << p.first << "\"" << std::endl;
+    std::cout << p.first << "\t"
+       << std::fixed << std::setprecision(4) << p.second << std::endl;
   }
 }
 #else
