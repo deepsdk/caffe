@@ -10,10 +10,18 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <gflags/gflags.h>
 
 #ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
+
+
+DEFINE_string(model, "", "Model file(.prototxt) path.");
+DEFINE_string(weights, "", "Weights file(.caffemodel) path.");
+DEFINE_string(meanfile, "", "Mean file(.binaryproto) path.");
+DEFINE_string(mean, "", "Mean BGR values seperated by commas.");
+DEFINE_string(label, "", "Label file path.");
 
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
@@ -23,6 +31,7 @@ class Classifier {
   Classifier(const string& model_file,
              const string& trained_file,
              const string& mean_file,
+             const string& mean,
              const string& label_file);
 
   std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
@@ -42,12 +51,14 @@ class Classifier {
   cv::Size input_geometry_;
   int num_channels_;
   cv::Mat mean_;
+  cv::Scalar mean_bgr_;
   std::vector<string> labels_;
 };
 
 Classifier::Classifier(const string& model_file,
                        const string& trained_file,
                        const string& mean_file,
+                       const string& mean,
                        const string& label_file) {
 #ifdef CPU_ONLY
   Caffe::set_mode(Caffe::CPU);
@@ -69,7 +80,20 @@ Classifier::Classifier(const string& model_file,
   input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
   /* Load the binaryproto mean file. */
-  SetMean(mean_file);
+  if (mean_file != ""){
+    SetMean(mean_file);
+  }else if (mean != ""){
+    stringstream ss(mean);
+    vector<int> bgr;
+    string token;
+    while(std::getline(ss, token, ',')) {
+      int v = atoi(token.c_str());
+      bgr.push_back(v);
+    }
+    CHECK(bgr.size() == 3)
+      << "Mean BGR values should be 3 integers.";
+    mean_bgr_ = cv::Scalar(bgr[0], bgr[1], bgr[2]);
+  }
 
   /* Load labels. */
   std::ifstream labels(label_file.c_str());
@@ -104,6 +128,9 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 /* Return the top N predictions. */
 std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
   std::vector<float> output = Predict(img);
+//  for(int i = 0; i < output.size(); i++){
+//    std::cout << output[i] << " ";
+//  }
 
   N = std::min<int>(labels_.size(), N);
   std::vector<int> maxN = Argmax(output, N);
@@ -112,7 +139,6 @@ std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
     int idx = maxN[i];
     predictions.push_back(std::make_pair(labels_[idx], output[idx]));
   }
-
   return predictions;
 }
 
@@ -202,9 +228,9 @@ void Classifier::Preprocess(const cv::Mat& img,
     sample = img;
 
   cv::Mat sample_resized;
-  if (sample.size() != input_geometry_)
+  if (sample.size() != input_geometry_){
     cv::resize(sample, sample_resized, input_geometry_);
-  else
+  } else
     sample_resized = sample;
 
   cv::Mat sample_float;
@@ -214,7 +240,19 @@ void Classifier::Preprocess(const cv::Mat& img,
     sample_resized.convertTo(sample_float, CV_32FC1);
 
   cv::Mat sample_normalized;
-  cv::subtract(sample_float, mean_, sample_normalized);
+  if (!mean_.empty()){
+    cv::subtract(sample_float, mean_, sample_normalized);
+  }else{
+//    std::vector<cv::Mat> planes;
+//    cv::split(sample_float, planes);
+//    for(int i = 0; i < planes.size(); i++){
+//      stringstream ss;
+//      ss << "origin" << i << ".png";
+//      cv::imwrite(ss.str(), planes[i]);
+//    }
+
+    sample_normalized = sample_float - mean_bgr_;
+  }
 
   /* This operation will write the separate BGR planes directly to the
    * input layer of the network because it is wrapped by the cv::Mat
@@ -227,22 +265,17 @@ void Classifier::Preprocess(const cv::Mat& img,
 }
 
 int main(int argc, char** argv) {
-  if (argc != 6) {
-    std::cerr << "Usage: " << argv[0]
-              << " deploy.prototxt network.caffemodel"
-              << " mean.binaryproto labels.txt img.jpg" << std::endl;
-    return 1;
-  }
-
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   ::google::InitGoogleLogging(argv[0]);
 
-  string model_file   = argv[1];
-  string trained_file = argv[2];
-  string mean_file    = argv[3];
-  string label_file   = argv[4];
-  Classifier classifier(model_file, trained_file, mean_file, label_file);
+  string model_file   = FLAGS_model;
+  string trained_file = FLAGS_weights;
+  string mean_file    = FLAGS_meanfile;
+  string mean    = FLAGS_mean;
+  string label_file   = FLAGS_label;
+  Classifier classifier(model_file, trained_file, mean_file, mean, label_file);
 
-  string file = argv[5];
+  string file = argv[1];
 
   cv::Mat img = cv::imread(file, -1);
   CHECK(!img.empty()) << "Unable to decode image " << file;
