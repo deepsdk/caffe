@@ -177,6 +177,8 @@ ifneq ($(CPU_ONLY), 1)
 	LIBRARY_DIRS += $(CUDA_LIB_DIR)
 	LIBRARIES := cudart cublas curand
 endif
+# use dlib
+INCLUDE_DIRS += ../dlib
 
 LIBRARIES += glog gflags protobuf boost_system boost_filesystem m hdf5_hl hdf5
 
@@ -400,12 +402,17 @@ LIBRARY_DIRS += $(BLAS_LIB)
 
 LIBRARY_DIRS += $(LIB_BUILD_DIR)
 
+# use dlib
+LIBRARY_DIRS += ../dlib/build/dlib/ 
+LIBRARIES += dlib 
+
 # Automatic dependency generation (nvcc is handled separately)
 CXXFLAGS += -MMD -MP
 
 # Complete build flags.
 COMMON_FLAGS += $(foreach includedir,$(INCLUDE_DIRS),-I$(includedir))
 CXXFLAGS += -pthread -fPIC $(COMMON_FLAGS) $(WARNINGS)
+CXXFLAGS += -std=c++11 # use dlib
 NVCCFLAGS += -ccbin=$(CXX) -Xcompiler -fPIC $(COMMON_FLAGS)
 # mex may invoke an older gcc that is too liberal with -Wuninitalized
 MATLAB_CXXFLAGS := $(CXXFLAGS) -Wno-uninitialized
@@ -573,6 +580,11 @@ $(STATIC_NAME): $(OBJS) | $(LIB_BUILD_DIR)
 
 $(BUILD_DIR)/%.o: %.cpp | $(ALL_BUILD_DIRS)
 	@ echo CXX $<
+	@ echo ------------------------------------------------------
+	@ echo $(INCLUDE_DIRS)
+	@ echo ------------------------------------------------------
+	@ echo $(CXXFLAGS)
+	@ echo ------------------------------------------------------
 	$(Q)$(CXX) $< $(CXXFLAGS) -c -o $@ 2> $@.$(WARNS_EXT) \
 		|| (cat $@.$(WARNS_EXT); exit 1)
 	@ cat $@.$(WARNS_EXT)
@@ -617,6 +629,11 @@ $(TOOL_BUILD_DIR)/%: $(TOOL_BUILD_DIR)/%.bin | $(TOOL_BUILD_DIR)
 
 $(TOOL_BINS): %.bin : %.o | $(DYNAMIC_NAME)
 	@ echo CXX/LD -o $@
+	@ echo ---------------------------
+#	@ echo $(LINKFLAGS)
+#	@ echo $(LIBRARY_NAME)
+	@ echo $(LDFLAGS)
+	@ echo ---------------------------
 	$(Q)$(CXX) $< -o $@ $(LINKFLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
 		-Wl,-rpath,$(ORIGIN)/../lib
 
