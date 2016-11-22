@@ -84,47 +84,16 @@ Classifier::Classifier(const string& model_file,
   }
 }
 
-static bool PairCompare(const std::pair<float, int>& lhs,
-                        const std::pair<float, int>& rhs) {
-  return lhs.first > rhs.first;
-}
-
-/* Return the indices of the top N values of vector v. */
-static std::vector<int> Argmax(const std::vector<float>& v, int N) {
-  std::vector<std::pair<float, int> > pairs;
-  for (size_t i = 0; i < v.size(); ++i)
-    pairs.push_back(std::make_pair(v[i], i));
-  std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(), PairCompare);
-
-  std::vector<int> result;
-  for (int i = 0; i < N; ++i)
-    result.push_back(pairs[i].second);
-  return result;
-}
-
 /* Return the top N predictions. */
 std::vector<cv::Point> Classifier::Classify(const cv::Mat& img, const cv::Rect& faceRect, int N) {
   std::vector<float> output = Predict(img);
 
-  std::cout << "Output:" << std::endl;
-  for(int i = 0; i < output.size(); i++){
-    std::cout << output[i] << " ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "faceRect=" << faceRect << std::endl;
   std::vector<cv::Point> predictions;
   for(int i = 0; i < output.size(); i+=2){
     float x = (output[i] + 0.5) * faceRect.width + faceRect.x;
     float y = (output[i+1] + 0.5) * faceRect.height + faceRect.y;
     predictions.push_back(cv::Point(int(x), int(y)));
   }
-
-  std::cout << "Output scaled:" << std::endl;
-  for(int i = 0; i < predictions.size(); i++){
-    std::cout << predictions[i] << " ";
-  }
-  std::cout << std::endl;
 
   return predictions;
 }
@@ -189,27 +158,11 @@ void Classifier::Preprocess(const cv::Mat& img,
   } else
     sample_resized = sample;
 
-  std::cout << "--------------------resized, type=" << img.type() << std::endl;
-  std::cout << img(cv::Rect(0,0,5,4)) << std::endl;
-
-  cv::imwrite("resized.png", sample_resized);
-  std::cout << "--------------------resized, type=" << sample_resized.type() << std::endl;
-  std::cout << "CV_8UC1=" << CV_8UC1 << ", CV_8UC3=" << CV_8UC3 << std::endl;
-  std::cout << sample_resized(cv::Rect(0,0,5,4)) << std::endl;
-
-  std::cout << "--------------------mean_, type=" << mean_.type() << std::endl;
-  std::cout << mean_(cv::Rect(0,0,5,4)) << std::endl;
-  std::cout << "--------------------std_, type=" << std_.type() << std::endl;
-  std::cout << std_(cv::Rect(0,0,5,4)) << std::endl;
-
   cv::Mat sample_float;
   if (num_channels_ == 3)
     sample_resized.convertTo(sample_float, CV_32FC3);
   else
     sample_resized.convertTo(sample_float, CV_32FC1);
-
-  std::cout << "--------------------sample_float, type=" << sample_float.type() << std::endl;
-  std::cout << "CV_32FC1=" << CV_32FC1 << ", CV_32FC3=" << CV_32FC3 << std::endl;
 
   cv::Mat mean_float;
   if (num_channels_ == 3)
@@ -232,10 +185,6 @@ void Classifier::Preprocess(const cv::Mat& img,
   if (!std_.empty()){
     cv::divide(sample_mean, std_float, sample_normalized);
   }
-
-  std::cout << "--------------------f/std" << std::endl;
-  std::cout << sample_normalized(cv::Rect(0,0,3,5)) << std::endl;
-
 
   /* This operation will write the separate BGR planes directly to the
    * input layer of the network because it is wrapped by the cv::Mat
@@ -262,40 +211,31 @@ int main(int argc, char** argv) {
   cv::Mat img = cv::imread(file, -1);
   CHECK(!img.empty()) << "Unable to decode image " << file;
 
-  std::cout << "dbg>Read image. size=" << img.size() << std::endl;
   dlib::frontal_face_detector detector = dlib::get_frontal_face_detector();
   dlib::cv_image<dlib::bgr_pixel> cimg(img);
   std::vector<dlib::rectangle> dets = detector(cimg);
-  std::cout << "dets.size=" <<  dets.size() << std::endl;
   for(int i = 0; i < dets.size(); i++){
     dlib::rectangle det = dets[i];
-    std::cout << "det[" << i << "] left=" << det.left() << ", top=" << det.top() << ", width=" << det.width() << ", height=" << det.height() << std::endl;
 
     cv::Rect faceRect(det.left(), det.top(), det.width(), det.height());
     cv::Mat faceOnly = img(faceRect);
 
-    cv::imwrite("face"+std::to_string(i)+".png", faceOnly);
-
     std::vector<cv::Point> predictions = classifier.Classify(faceOnly, faceRect);
-
     for(int i = 0; i < predictions.size(); i++){
-      std::cout << "prediction" << i << " = " << predictions[i] << std::endl;
-      cv::circle(img, predictions[i], 2, cv::Scalar(0,200,0), -1);
+      if (i > 0){
+        std::cout << ",";
+      }
+      std::cout << predictions[i].x;
+      std::cout << "," << predictions[i].y;
     }
-    cv::imwrite("output"+std::to_string(i)+".png", img);
+    std::cout << std::endl;
 
-    return 0;
+//    for(int i = 0; i < predictions.size(); i++){
+//      std::cout << "prediction" << i << " = " << predictions[i] << std::endl;
+//      cv::circle(img, predictions[i], 2, cv::Scalar(0,200,0), -1);
+//    }
+//    cv::imwrite("output"+std::to_string(i)+".png", img);
   }
-
-
-//  std::vector<Prediction> predictions = classifier.Classify(img);
-//
-//  /* Print the top N predictions. */
-//  for (size_t i = 0; i < predictions.size(); ++i) {
-//    Prediction p = predictions[i];
-//    std::cout << p.first << "\t"
-//       << std::fixed << std::setprecision(4) << p.second << std::endl;
-//  }
 }
 #else
 int main(int argc, char** argv) {
